@@ -1,33 +1,41 @@
+use crate::declarations::{Enumeration, Var};
+
 use super::{
-    common::{try_an_doc, try_an_member, Var},
-    tagnalizer::{Error, Event, TagResult},
+    common::safe_name,
+    parser::{Error, Event, TagResult},
+    Analyzer,
 };
 use std::io::Read;
 
 const ENUMERATION_TAG: &str = "enumeration";
+const ENUM_VALUE_TAG: &str = "member";
 
-#[derive(Debug)]
-pub struct Enumeration {
-    pub name: String,
-    pub values: Vec<Var>,
-    pub doc: Option<String>,
-}
-
-pub fn try_an_enum<R: Read>(ev: &mut Event<R>) -> TagResult<Enumeration> {
-    if let Some(attrs) = ev.check_start(ENUMERATION_TAG) {
-        let name = ev.get_attr_must("name")?;
-        let mut values = Vec::new();
-        let mut doc = None;
-        ev.analyze_tag(ENUMERATION_TAG, attrs, |ev| {
-            if doc.is_none() {
-                doc = try_an_doc(ev)?
-            }
-            if let Some(member) = try_an_member(ev)? {
-                values.push(member);
-            }
-            Ok(false)
-        })?;
-        return Ok(Some(Enumeration { name, doc, values }));
+impl Analyzer {
+    fn try_an_enum_value(&self, ev: &mut Event) -> TagResult<Var> {
+        self.try_an_variable(ENUM_VALUE_TAG, ev).map(|o| {
+            o.map(|mut v| {
+                v.name = safe_name(v.name.to_uppercase());
+                v
+            })
+        })
     }
-    Ok(None)
+
+    pub fn try_an_enum(&self, ev: &mut Event) -> TagResult<Enumeration> {
+        ev.try_analyzing([ENUMERATION_TAG], |ev, tag, attrs| {
+            let name = attrs.get_must("name")?;
+            let mut values = Vec::new();
+            let mut doc = None;
+            ev.until_closes(tag, |ev| {
+                if doc.is_none() {
+                    doc = self.try_an_doc(ev)?
+                }
+                if let Some(mut member) = self.try_an_enum_value(ev)? {
+                    member.name = safe_name(member.name.to_uppercase());
+                    values.push(member);
+                }
+                Ok(false)
+            })?;
+            Ok(Some(Enumeration { name, doc, values }))
+        })
+    }
 }

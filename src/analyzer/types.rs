@@ -1,27 +1,12 @@
+use crate::declarations::Type;
 use std::{collections::HashMap, io::Read};
 
 use lazy_static::lazy_static;
 
-use super::tagnalizer::{Event, TagResult};
-
-#[derive(Debug, Clone)]
-pub enum Type {
-    Primitive(String),
-    LocalClass(String),
-    ExternalClass { module: String, name: String },
-    Any,
-}
-
-impl std::fmt::Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Primitive(s) => write!(f, "{}", s),
-            Self::LocalClass(c) => write!(f, "{}", c),
-            Self::ExternalClass { module, name } => write!(f, "{}.{}", module, name),
-            Self::Any => write!(f, "any"),
-        }
-    }
-}
+use super::{
+    parser::{Event, TagResult},
+    Analyzer,
+};
 
 macro_rules! typ {
     (lit $glib:tt => $py:ident) => {
@@ -33,14 +18,8 @@ macro_rules! typ {
             Type::Primitive(String::from(stringify!($py))),
         )
     };
-    ($glib:ident => $mod:ident.$cls:ident) => {
-        (
-            stringify!($glib),
-            Type::ExternalClass {
-                module: String::from(stringify!($mod)),
-                name: String::from(stringify!($cls)),
-            },
-        )
+    ($glib:ident => Any) => {
+        (stringify!($glib), Type::Any)
     };
 }
 
@@ -61,7 +40,7 @@ pub fn glib_to_native_type(type_name: &str) -> &'static Type {
             typ!(gint64 => int),
             typ!(guint64 => int),
             typ!(gsize => int),
-            typ!(gpointer => typing.Any),
+            typ!(gpointer => Any),
             typ!(none => None),
             typ!(gchar => str),
             typ!(guchar => str),
@@ -87,7 +66,6 @@ pub fn glib_to_native_type(type_name: &str) -> &'static Type {
 
 pub fn class_or_type_to_native(type_name: &str) -> Type {
     let t = glib_to_native_type(type_name);
-    println!("{} => {}", type_name, t);
     match t {
         &Type::Any => {
             if let Some((module, name)) = type_name.split_once('.') {
@@ -105,16 +83,28 @@ pub fn class_or_type_to_native(type_name: &str) -> Type {
 
 const TYPE_TAG: &str = "type";
 
-pub fn try_an_type<R: Read>(ev: &mut Event<R>) -> TagResult<&'static Type> {
-    ev.try_analyze_tag(TYPE_TAG, |ev| {
-        let type_name = ev.get_attr_must("name")?;
-        Ok(Some(glib_to_native_type(&type_name)))
-    })
-}
+impl Analyzer {
+    pub fn try_an_type(&self, ev: &mut Event) -> TagResult<&'static Type> {
+        ev.simple_analyze(TYPE_TAG, |_, attrs| {
+            Ok(Some(
+                attrs.get("name").map_or(&ANY, |s| glib_to_native_type(&s)),
+            ))
+        })
+    }
 
-pub fn try_an_class<R: Read>(ev: &mut Event<R>) -> TagResult<Type> {
-    ev.try_analyze_tag(TYPE_TAG, |ev| {
-        let type_name = ev.get_attr_must("name")?;
-        Ok(Some(class_or_type_to_native(&type_name)))
-    })
+    pub fn try_an_type_like_tag(&mut self, tag: &str, ev: &mut Event) -> TagResult<Type> {
+        ev.simple_analyze(tag, |_, attrs| {
+            Ok(Some(attrs.get("name").map_or(Type::Any, |s| {
+                let typ = class_or_type_to_native(&s);
+                if let Type::ExternalClass { module, .. } = &typ {
+                    self.imports.insert(module.clone());
+                }
+                typ
+            })))
+        })
+    }
+
+    pub fn try_an_class_type(&mut self, ev: &mut Event) -> TagResult<Type> {
+        self.try_an_type_like_tag(TYPE_TAG, ev)
+    }
 }

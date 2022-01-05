@@ -1,100 +1,122 @@
+mod classes;
 mod common;
 mod enumerations;
 mod functions;
-mod tagnalizer;
+mod parser;
 mod types;
 
-use std::{collections::HashSet, io::Read};
+use indexmap::IndexMap;
+use std::{collections::HashSet, io::Read, mem};
 
-use xml::{EventReader, ParserConfig};
+use xml::{name::Name, EventReader, ParserConfig};
 
-use crate::analyzer::common::Value;
+use crate::declarations::{Class, Enumeration, Function, Type, Value, Var};
 
 use self::{
-    common::Var,
-    enumerations::{try_an_enum, Enumeration},
-    functions::{try_an_function, Function},
-    tagnalizer::{start_analyzing, Event, TagResult},
+    common::safe_name,
+    parser::{start_analyzing, Event, TagResult},
 };
 
-pub struct Class {
-    /*
-pub name: String,
-pub bases: Vec<String>,
-pub fields: Vec<Var>,
-pub methods: Vec<Function>,
-pub doc: Option<String>,*/}
 const NAMESPACE_TAG: &str = "namespace";
+const CONSTANT_TAG: &str = "constant";
 
+/// Contains all the declarations inside a `<namespace />`
 pub struct Namespace {
+    pub imports: HashSet<String>,
+    pub constants: Vec<Var>,
     pub enums: Vec<Enumeration>,
     pub functions: Vec<Function>,
-}
-
-pub fn try_an_namespace<R: Read>(ev: &mut Event<R>) -> TagResult<Namespace> {
-    if let Some(attrs) = ev.check_start(NAMESPACE_TAG) {
-        let mut enums = Vec::new();
-        let mut functions = Vec::new();
-        ev.analyze_tag(NAMESPACE_TAG, attrs, |ev| {
-            if let Some(e) = try_an_enum(ev)? {
-                println!("got an enum!");
-                enums.push(e);
-            }
-            if let Some(f) = try_an_function(ev)? {
-                println!("got an function!");
-                functions.push(f);
-            }
-            Ok(false)
-        })?;
-        return Ok(Some(Namespace { enums, functions }));
-    }
-    Ok(None)
-}
-
-pub struct Analyzer<R: Read> {
-    pub ignore_docs: bool,
-    pub source: Option<R>,
-
-    pub gi_imports: HashSet<String>,
     pub classes: Vec<Class>,
 }
 
-impl<R: Read> Analyzer<R> {
-    pub fn new(source: R, ignore_docs: bool) -> Self {
+/// Analyzes a gir document
+pub struct Analyzer {
+    ignore_docs: bool,
+    imports: HashSet<String>,
+}
+
+fn traverse(h: &mut IndexMap<String, Class>, s: &mut Vec<Class>, c: Class) {
+    for base in &c.bases {
+        if let Type::LocalClass(base) = base {
+            if let Some(base) = h.remove(base) {
+                traverse(h, s, base);
+            }
+        }
+    }
+    s.push(c)
+}
+
+impl Analyzer {
+    pub fn new(ignore_docs: bool) -> Self {
         Self {
             ignore_docs,
-            source: Some(source),
-            gi_imports: HashSet::new(),
-            classes: Vec::new(),
+            imports: HashSet::new(),
         }
     }
 
-    pub fn analyze(&mut self) {
-        let config = ParserConfig::new().trim_whitespace(true);
-        let mut parser = EventReader::new_with_config(self.source.take().unwrap(), config);
+    fn try_an_constant(&self, ev: &mut Event) -> TagResult<Var> {
+        self.try_an_variable(CONSTANT_TAG, ev).map(|o| {
+            o.map(|mut v| {
+                v.name = safe_name(v.name);
+                v.constant = true;
+                v
+            })
+        })
+    }
 
-        let ns = start_analyzing(&mut parser, try_an_namespace)
-            .unwrap()
-            .unwrap();
-
-        for e in ns.enums {
-            println!("found enum \"{}\"", e.name);
-            println!("with values:");
-            for v in e.values {
-                let value = v.value.unwrap_or(Value::Str("was_rust_None".into()));
-                println!("  {} = {}", v.name, value);
-            }
-        }
-        for f in ns.functions {
-            print!("{}(", f.name);
-
-            for (i, p) in f.parameters.iter().enumerate() {
-                if i > 0 {
-                    print!(", ");
+    fn try_an_namespace(&mut self, ev: &mut Event) -> TagResult<Namespace> {
+        ev.try_analyzing([NAMESPACE_TAG], |ev, tag, attrs| {
+            let mut constants = Vec::new();
+            let mut enums = Vec::new();
+            let mut functions = Vec::new();
+            let mut classes = IndexMap::<String, Class>::new();
+            ev.until_closes(tag, |ev| {
+                if let Some(e) = self.try_an_enum(ev)? {
+                    enums.push(e);
                 }
-                print!("{}: {}", p.name, p.typ);
+                if let Some(c) = self.try_an_constant(ev)? {
+                    constants.push(c);
+                }
+                if let Some(f) = self.try_an_function(ev, None)? {
+                    functions.push(f);
+                }
+                if let Some(c) = self.try_an_class(ev)? {
+                    classes.insert(c.name.clone(), c);
+                }
+                Ok(false)
+            })?;
+
+            // Sort class order of appearance by parents (topology sort)
+
+            let mut sorted_classes = Vec::with_capacity(classes.len());
+
+            while !classes.is_empty() {
+                let next_key = classes.first().map(|(k, _)| k.clone());
+
+                if let Some(key) = next_key {
+                    if let Some(c) = classes.remove(&key) {
+                        traverse(&mut classes, &mut sorted_classes, c);
+                    }
+                }
             }
-            println!(") -> {}", f.return_type);
-        }
+
+            Ok(Some(Namespace {
+                imports: mem::replace(&mut self.imports, HashSet::new()),
+                constants,
+                enums,
+                functions,
+                classes: sorted_classes,
+            }))
+        })
+    }
+
+    /// Parses and consumes the source, returns the resulting [`Namespace`]
+    pub fn analyze(&mut self, source: impl Read + 'static) -> Namespace {
+        let config = ParserConfig::new().trim_whitespace(true);
+        let mut parser = EventReader::new_with_config(Box::new(source) as Box<dyn Read>, config);
+
+        start_analyzing(&mut parser, |e| self.try_an_namespace(e))
+            .unwrap()
+            .unwrap()
     }
 }
