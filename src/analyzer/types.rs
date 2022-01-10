@@ -1,5 +1,5 @@
-use crate::declarations::Type;
-use std::{collections::HashMap, io::Read};
+use crate::{declarations::Type, tag_matches};
+use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 
@@ -27,7 +27,7 @@ const ANY: Type = Type::Any;
 
 pub fn glib_to_native_type(type_name: &str) -> &'static Type {
     lazy_static! {
-        static ref map: HashMap<&'static str, Type> = HashMap::from([
+        static ref MAP: HashMap<&'static str, Type> = HashMap::from([
             typ!(gboolean => bool),
             typ!(gint => int),
             typ!(guint => int),
@@ -61,7 +61,7 @@ pub fn glib_to_native_type(type_name: &str) -> &'static Type {
             typ!(utf8 => str),
         ]);
     };
-    map.get(type_name).unwrap_or(&ANY)
+    MAP.get(type_name).unwrap_or(&ANY)
 }
 
 pub fn class_or_type_to_native(type_name: &str) -> Type {
@@ -85,23 +85,27 @@ const TYPE_TAG: &str = "type";
 
 impl Analyzer {
     pub fn try_an_type(&self, ev: &mut Event) -> TagResult<&'static Type> {
-        ev.simple_analyze(TYPE_TAG, |_, attrs| {
-            Ok(Some(
-                attrs.get("name").map_or(&ANY, |s| glib_to_native_type(&s)),
-            ))
-        })
+        let (depth, attrs, ..) = tag_matches!(ev, TYPE_TAG);
+
+        while ev.below(depth)? {}
+
+        Ok(Some(
+            attrs.get("name").map_or(&ANY, |s| glib_to_native_type(&s)),
+        ))
     }
 
     pub fn try_an_type_like_tag(&mut self, tag: &str, ev: &mut Event) -> TagResult<Type> {
-        ev.simple_analyze(tag, |_, attrs| {
-            Ok(Some(attrs.get("name").map_or(Type::Any, |s| {
-                let typ = class_or_type_to_native(&s);
-                if let Type::ExternalClass { module, .. } = &typ {
-                    self.imports.insert(module.clone());
-                }
-                typ
-            })))
-        })
+        let (depth, attrs, ..) = tag_matches!(ev, tag);
+
+        while ev.below(depth)? {}
+
+        Ok(Some(attrs.get("name").map_or(Type::Any, |s| {
+            let typ = class_or_type_to_native(&s);
+            if let Type::ExternalClass { module, .. } = &typ {
+                self.imports.insert(module.clone());
+            }
+            typ
+        })))
     }
 
     pub fn try_an_class_type(&mut self, ev: &mut Event) -> TagResult<Type> {

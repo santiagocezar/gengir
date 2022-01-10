@@ -1,4 +1,7 @@
-use crate::declarations::{Value, Var};
+use crate::{
+    declarations::{Value, Var},
+    tag_matches,
+};
 
 use super::{
     parser::{Event, TagResult, XmlEvent},
@@ -6,7 +9,7 @@ use super::{
 };
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{collections::HashSet, io::Read};
+use std::collections::HashSet;
 
 const DOC_TAG: &str = "doc";
 const MEMBER_TAG: &str = "member";
@@ -47,38 +50,41 @@ pub fn safe_name(mut name: String) -> String {
 impl Analyzer {
     pub fn try_an_doc(&self, ev: &mut Event) -> TagResult<String> {
         if self.ignore_docs {
-            Ok(None)
-        } else {
-            ev.simple_analyze(DOC_TAG, |ev, _| match &ev.event {
-                XmlEvent::Characters(text) => Ok(Some(text.to_owned())),
-                _ => Ok(None),
-            })
+            return Ok(None);
         }
+        let (depth, ..) = tag_matches!(ev, DOC_TAG);
+        while ev.below(depth)? {
+            if let XmlEvent::Characters(text) = &ev.event {
+                return Ok(Some(text.to_owned()));
+            }
+        }
+        Ok(None)
     }
 
     pub fn try_an_variable(&self, tag: &str, ev: &mut Event) -> TagResult<Var> {
-        ev.try_analyzing([tag], |ev, tag, attrs| {
-            let name = attrs.get_must("name")?;
-            let value = attrs.get("value").map(|s| analyze_value(&s));
-            let mut typ = None;
-            let mut doc = None;
-            ev.until_closes(tag, |ev| {
-                if doc.is_none() {
-                    doc = self.try_an_doc(ev)?;
-                }
-                if typ.is_none() {
-                    typ = self.try_an_type(ev)?;
-                }
-                Ok(doc.is_some() && typ.is_some())
-            })?;
-            Ok(Some(Var {
-                name,
-                value,
-                typ,
-                doc,
-                constant: false,
-            }))
-        })
+        let (depth, attrs, ..) = tag_matches!(ev, tag);
+
+        let name = attrs.get_must("name")?;
+        let value = attrs.get("value").map(|s| analyze_value(&s));
+        let mut typ = None;
+        let mut doc = None;
+
+        while ev.below(depth)? {
+            if doc.is_none() {
+                doc = self.try_an_doc(ev)?;
+            }
+            if typ.is_none() {
+                typ = self.try_an_type(ev)?;
+            }
+        }
+
+        Ok(Some(Var {
+            name,
+            value,
+            typ,
+            doc,
+            constant: false,
+        }))
     }
 
     pub fn try_an_member(&self, ev: &mut Event) -> TagResult<Var> {

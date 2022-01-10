@@ -1,4 +1,6 @@
-use std::fmt::write;
+use std::{borrow::Borrow, collections::HashSet, hash::Hash};
+
+use indexmap::IndexSet;
 
 #[derive(Debug, Clone)]
 pub enum Type {
@@ -54,7 +56,6 @@ pub enum Param {
 
 #[derive(Debug, Clone)]
 pub enum FunctionKind {
-    Signal,
     Static,
     Method,
     StaticMethod,
@@ -75,8 +76,105 @@ pub struct Class {
     pub name: String,
     pub bases: Vec<Type>,
     pub fields: Vec<Var>,
-    pub methods: Vec<Function>,
+    pub methods: IndexSet<Function>,
     pub doc: Option<String>,
+}
+
+/// Contains all the declarations inside a `<namespace />`
+pub struct Namespace {
+    pub name: String,
+    pub imports: HashSet<String>,
+    pub constants: Vec<Var>,
+    pub enums: Vec<Enumeration>,
+    pub functions: Vec<Function>,
+    pub classes: IndexSet<Class>,
+}
+
+impl Function {
+    pub fn clear_parameters(mut self) -> Self {
+        self.parameters.clear();
+        self
+    }
+    pub fn add_param(mut self, param: Param) -> Self {
+        self.parameters.push(param);
+        self
+    }
+    pub fn add_named_param<'a>(
+        self,
+        name: &str,
+        typ: Type,
+        optional: bool,
+        doc: impl Into<Option<&'a str>>,
+    ) -> Self {
+        let doc: Option<&str> = doc.into();
+        self.add_param(Param::Named {
+            name: name.into(),
+            typ,
+            optional,
+            doc: doc.map(|s| String::from(s)),
+        })
+    }
+    pub fn add_variadic_param<'a>(
+        self,
+        name: &str,
+        typ: Type,
+        doc: impl Into<Option<&'a str>>,
+    ) -> Self {
+        let doc: Option<&str> = doc.into();
+        self.add_param(Param::Variadic {
+            name: name.into(),
+            typ,
+            doc: doc.map(|s| String::from(s)),
+        })
+    }
+    pub fn add_self_param(self) -> Self {
+        self.add_param(Param::Instance)
+    }
+    pub fn add_star_param(self) -> Self {
+        self.add_param(Param::Star)
+    }
+}
+
+impl Hash for Class {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        state.finish();
+    }
+}
+
+impl PartialEq for Class {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for Class {}
+
+impl Borrow<str> for Class {
+    fn borrow(&self) -> &str {
+        &self.name
+    }
+}
+
+impl Hash for Function {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        state.finish();
+    }
+}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for Function {}
+
+impl Borrow<str> for Function {
+    fn borrow(&self) -> &str {
+        &self.name
+    }
 }
 
 impl std::fmt::Display for Type {
@@ -114,60 +212,6 @@ impl std::fmt::Display for Var {
             write!(f, " = {}", value)?;
         }
 
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for Enumeration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "enum \"{}\" {{", self.name)?;
-        for v in &self.values {
-            writeln!(f, "  {}", v)?;
-        }
-        write!(f, "}}")?;
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for Param {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Named {
-                name,
-                typ,
-                optional,
-                ..
-            } => {
-                if *optional {
-                    write!(f, "{}?: {}", name, typ)
-                } else {
-                    write!(f, "{}: {}", name, typ)
-                }
-            }
-            &Self::Variadic { .. } | &Self::Star => write!(f, "..."),
-            &Self::Instance => write!(f, "self"),
-        }
-    }
-}
-
-impl std::fmt::Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.kind {
-            FunctionKind::Static => write!(f, "funcion "),
-            FunctionKind::Method => write!(f, "method "),
-            FunctionKind::StaticMethod => write!(f, "static method "),
-            FunctionKind::Signal => write!(f, "signal "),
-        }?;
-
-        write!(f, "{}(", self.name)?;
-
-        for (i, p) in self.parameters.iter().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", p)?;
-        }
-        write!(f, ") -> {}", self.return_type)?;
         Ok(())
     }
 }

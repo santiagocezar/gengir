@@ -1,9 +1,9 @@
 use std::io::{self, Cursor, Write};
 
-use crate::{
-    analyzer::Namespace,
-    declarations::{Class, Enumeration, Function, Param, Var},
-};
+use lazy_static::lazy_static;
+use regex::Regex;
+
+use crate::declarations::{Class, Enumeration, Function, Namespace, Param, Var};
 
 pub struct PythonGenerator<W: Write> {
     writer: W,
@@ -36,12 +36,43 @@ impl Indent {
 }
 
 fn summarize(mut doc: String) -> String {
-    doc.find('\n').map(|s| doc.truncate(s));
-    doc
+    lazy_static! {
+        static ref PAT: Regex = Regex::new(r"[.]\s").unwrap();
+    }
+    let period = PAT.find(&doc).map(|s| s.start());
+    if let Some(p) = period {
+        doc.truncate(p);
+    }
+
+    doc.replace('\n', " ")
 }
-fn summarize_ref(doc: &mut String) {
-    doc.find('\n').map(|s| doc.truncate(s));
+
+/*
+
+// this code was supposed to generate signals, but it ended up being useless as
+// python does not inherit overloads
+
+write!(self.writer, "{i}@typing.overload\n{i}def connect(self: Self, signal: typing.Literal[\"{}\"], callback: typing.Callable[typing.Concatenate[[Self", func.name, i = indent)?;
+for (i, p) in func.parameters.drain(..).enumerate() {
+    write!(self.writer, ", ")?;
+    match p {
+        Param::Named { optional, typ, .. } => {
+            if optional {
+                write!(self.writer, "typing.Optional[{}]", typ)?;
+            } else {
+                write!(self.writer, "{}", typ)?;
+            }
+        }
+        _ => (),
+    }
 }
+write!(
+    self.writer,
+    "], P], {}], *bind: P.args, **kwbind: P.kwargs) -> typing.Any:",
+    func.return_type
+)?;
+
+*/
 
 impl<W: Write> PythonGenerator<W> {
     pub fn new(writer: W) -> Self {
@@ -155,7 +186,8 @@ impl<W: Write> PythonGenerator<W> {
         let mut docstring = Cursor::new(Vec::new());
 
         if let Some(doc) = func.doc {
-            docstring.write(body_indent.align(doc).as_bytes())?;
+            docstring.write(summarize(doc).as_bytes())?;
+            docstring.write(b"\n\n")?;
         }
 
         if matches!(func.kind, StaticMethod) {
@@ -219,7 +251,7 @@ impl<W: Write> PythonGenerator<W> {
         if docstring.is_empty() {
             writeln!(self.writer, "\n{}...", body_indent)?;
         } else {
-            write!(self.writer, "\n{i}\"\"\"\n{i}", i = body_indent)?;
+            write!(self.writer, "\n{i}\"\"\"", i = body_indent)?;
             self.writer.write(&docstring)?;
             writeln!(self.writer, "{}\"\"\"", body_indent)?;
         }

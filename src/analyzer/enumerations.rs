@@ -1,11 +1,13 @@
-use crate::declarations::{Enumeration, Var};
+use crate::{
+    declarations::{Enumeration, Var},
+    tag_matches,
+};
 
 use super::{
     common::safe_name,
-    parser::{Error, Event, TagResult},
+    parser::{Event, TagResult},
     Analyzer,
 };
-use std::io::Read;
 
 const ENUMERATION_TAG: &str = "enumeration";
 const ENUM_VALUE_TAG: &str = "member";
@@ -21,21 +23,22 @@ impl Analyzer {
     }
 
     pub fn try_an_enum(&self, ev: &mut Event) -> TagResult<Enumeration> {
-        ev.try_analyzing([ENUMERATION_TAG], |ev, tag, attrs| {
-            let name = attrs.get_must("name")?;
-            let mut values = Vec::new();
-            let mut doc = None;
-            ev.until_closes(tag, |ev| {
-                if doc.is_none() {
-                    doc = self.try_an_doc(ev)?
-                }
-                if let Some(mut member) = self.try_an_enum_value(ev)? {
-                    member.name = safe_name(member.name.to_uppercase());
-                    values.push(member);
-                }
-                Ok(false)
-            })?;
-            Ok(Some(Enumeration { name, doc, values }))
-        })
+        let (depth, attrs, ..) = tag_matches!(ev, ENUMERATION_TAG);
+
+        let name = attrs.get_must("name")?;
+        let mut values = Vec::new();
+        let mut doc = None;
+
+        while ev.below(depth)? {
+            if doc.is_none() {
+                doc = self.try_an_doc(ev)?
+            }
+            if let Some(mut member) = self.try_an_enum_value(ev)? {
+                member.name = safe_name(member.name.to_uppercase());
+                values.push(member);
+            }
+        }
+
+        Ok(Some(Enumeration { name, doc, values }))
     }
 }

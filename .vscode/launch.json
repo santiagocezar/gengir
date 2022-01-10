@@ -20,7 +20,7 @@
                 }
             },
             "args": [
-                "/usr/share/gir-1.0/Gtk-3.0.gir"
+                "/usr/share/gir-1.0/Gio-2.0.gir"
             ],
             "cwd": "${workspaceFolder}"
         },

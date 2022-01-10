@@ -1,7 +1,7 @@
 mod analyzer;
 mod declarations;
-mod pygen;
-mod xml_skip;
+mod generation;
+mod overrides;
 
 use std::{
     ffi::OsString,
@@ -12,11 +12,15 @@ use std::{
     process::Command,
 };
 
-use analyzer::{Analyzer, Namespace};
+use analyzer::Analyzer;
 use clap::Parser;
+use declarations::Namespace;
+//use overrides::apply_overrides;
 
-use pygen::PythonGenerator;
+use generation::PythonGenerator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+
+use crate::overrides::apply_overrides;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -122,26 +126,20 @@ fn main() -> io::Result<()> {
     };
 
     paths.par_iter().try_for_each(|p| {
-        let ns = analyze_path(p, cli.no_docs);
+        let mut ns = analyze_path(p, cli.no_docs);
 
-        let filename = p.file_name().map(|s| s.to_string_lossy().to_string());
+        apply_overrides(&mut ns);
 
-        if let Some(module) = filename
-            .as_ref()
-            .map(|f| f.split_once('-'))
-            .flatten()
-            .map(|(m, _)| m.to_owned() + ".pyi")
-        {
-            let py = File::create(&out_dir.join("repository").join(module))?;
-            let mut buf = BufWriter::new(py);
-            let mut gen = PythonGenerator::new(&mut buf);
-            gen.write_namespace(ns)?;
-        } else {
-            println!("couldn't get module name for {}", p.display())
-        }
+        let py = File::create(&out_dir.join("repository").join(ns.name.clone() + ".pyi"))?;
+        let mut buf = BufWriter::new(py);
+        let mut gen = PythonGenerator::new(&mut buf);
+        gen.write_namespace(ns)?;
+
         io::Result::Ok(())
         //generate_module(analyzed, f)
     })?;
+
+    //apply_overrides(&out_dir)?;
 
     Ok(())
 }
