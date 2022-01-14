@@ -20,6 +20,8 @@ GenGIR is a tool to create type definitions for PyGObject. It uses modern python
 
 ## Building & Installing
 
+To build this project, you need to have installed the Rust toolchain, version 1.56.0 or newer.
+
 `git clone` this repository, and run `cargo build --release`.
 
 You can run the program once using `cargo run --release`, but if you use separate `venv`s for your projects, I'd recommend installing it user wide with `cargo install --path .`
