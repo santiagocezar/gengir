@@ -59,6 +59,7 @@ pub enum FunctionKind {
     Static,
     Method,
     StaticMethod,
+    Virtual,
 }
 
 #[derive(Debug, Clone)]

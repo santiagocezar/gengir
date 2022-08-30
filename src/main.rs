@@ -17,10 +17,9 @@ use clap::Parser;
 use declarations::Namespace;
 //use overrides::apply_overrides;
 
-use generation::PythonGenerator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::overrides::apply_overrides;
+use crate::{generation::PythonGenerator, overrides::apply_overrides};
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]

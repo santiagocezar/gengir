@@ -16,6 +16,7 @@ GenGIR is a tool to create type definitions for PyGObject. It uses modern python
 ## TODO
 
 - Complete [`overrides.rs`](src/overrides.rs)
+- Correct typings for constructors
 - Typings for `.connect` signal names and callbacks
 
 ## Building & Installing

@@ -3,7 +3,7 @@ use std::io::{self, Cursor, Write};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::declarations::{Class, Enumeration, Function, Namespace, Param, Var};
+use crate::declarations::{Class, Enumeration, Function, FunctionKind, Namespace, Param, Var};
 
 pub struct PythonGenerator<W: Write> {
     writer: W,
@@ -179,10 +179,9 @@ impl<W: Write> PythonGenerator<W> {
     }
 
     fn write_function(&mut self, mut func: Function, indent: Indent) -> io::Result<()> {
-        use crate::declarations::FunctionKind::*;
-
         let body_indent = indent + 1;
 
+        // using cursor because it's easier to write to
         let mut docstring = Cursor::new(Vec::new());
 
         if let Some(doc) = func.doc {
@@ -190,8 +189,11 @@ impl<W: Write> PythonGenerator<W> {
             docstring.write(b"\n\n")?;
         }
 
-        if matches!(func.kind, StaticMethod) {
-            writeln!(self.writer, "{}@staticmethod", indent)?;
+        match func.kind {
+            FunctionKind::StaticMethod => writeln!(self.writer, "{}@staticmethod", indent)?,
+            // virtual methods have a do_ prefix
+            FunctionKind::Virtual => func.name.insert_str(0, "do_"),
+            _ => {}
         }
 
         write!(self.writer, "{}def {}(", indent, func.name)?;
@@ -201,7 +203,9 @@ impl<W: Write> PythonGenerator<W> {
                 write!(self.writer, ", ")?;
             }
 
-            let doc = match p {
+            let mut param_doc: Option<(String, String)> = None;
+
+            match p {
                 Param::Named {
                     name,
                     doc,
@@ -213,23 +217,21 @@ impl<W: Write> PythonGenerator<W> {
                     } else {
                         write!(self.writer, "{}: {} = None", name, typ)?;
                     }
-                    doc.map(|d| (name, d))
+                    param_doc = doc.map(|d| (name, d))
                 }
                 Param::Variadic { name, doc, typ } => {
                     write!(self.writer, "*{}: {}", name, typ)?;
-                    doc.map(|d| (name, d))
+                    param_doc = doc.map(|d| (name, d))
                 }
                 Param::Instance => {
                     write!(self.writer, "self")?;
-                    None
                 }
                 Param::Star => {
                     write!(self.writer, "*")?;
-                    None
                 }
             };
 
-            if let Some((name, doc)) = doc {
+            if let Some((name, doc)) = param_doc {
                 writeln!(
                     docstring,
                     "{}:param {}: {}",

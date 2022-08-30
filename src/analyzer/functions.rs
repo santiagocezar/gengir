@@ -97,7 +97,8 @@ impl Analyzer {
         let mut doc = None;
         let mut kind = match tag {
             FUNCTION_TAG => FunctionKind::Static,
-            METHOD_TAG | VIRTUAL_METHOD_TAG | CONSTRUCTOR_TAG => FunctionKind::Method,
+            METHOD_TAG | CONSTRUCTOR_TAG => FunctionKind::Method,
+            VIRTUAL_METHOD_TAG => FunctionKind::Virtual,
             _ => unreachable!(),
         };
         let mut return_doc = None;
