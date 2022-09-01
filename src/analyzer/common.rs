@@ -12,7 +12,7 @@ use regex::Regex;
 use std::collections::HashSet;
 
 const DOC_TAG: &str = "doc";
-const MEMBER_TAG: &str = "member";
+const PROPERTY_TAG: &str = "property";
 
 pub fn analyze_value(val: &str) -> Value {
     lazy_static! {
@@ -74,7 +74,7 @@ impl Analyzer {
                 doc = self.try_an_doc(ev)?;
             }
             if typ.is_none() {
-                typ = self.try_an_type(ev)?;
+                typ = self.try_a_class_type(ev)?;
             }
         }
 
@@ -87,8 +87,8 @@ impl Analyzer {
         }))
     }
 
-    pub fn try_an_member(&self, ev: &mut Event) -> TagResult<Var> {
-        self.try_an_variable(MEMBER_TAG, ev).map(|o| {
+    pub fn try_a_property(&self, ev: &mut Event) -> TagResult<Var> {
+        self.try_an_variable(PROPERTY_TAG, ev).map(|o| {
             o.map(|mut v| {
                 v.name = safe_name(v.name);
                 v

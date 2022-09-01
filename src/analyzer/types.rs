@@ -8,7 +8,7 @@ use super::{
     Analyzer,
 };
 
-macro_rules! typ {
+macro_rules! map {
     (lit $glib:tt => $py:ident) => {
         ($glib, Type::Primitive(String::from(stringify!($py))))
     };
@@ -28,37 +28,37 @@ const ANY: Type = Type::Any;
 pub fn glib_to_native_type(type_name: &str) -> &'static Type {
     lazy_static! {
         static ref MAP: HashMap<&'static str, Type> = HashMap::from([
-            typ!(gboolean => bool),
-            typ!(gint => int),
-            typ!(guint => int),
-            typ!(gint8 => int),
-            typ!(guint8 => int),
-            typ!(gint16 => int),
-            typ!(guint16 => int),
-            typ!(gint32 => int),
-            typ!(guint32 => int),
-            typ!(gint64 => int),
-            typ!(guint64 => int),
-            typ!(gsize => int),
-            typ!(gpointer => Any),
-            typ!(none => None),
-            typ!(gchar => str),
-            typ!(guchar => str),
-            typ!(lit "gchar*" => str),
-            typ!(lit "guchar*" => str),
-            typ!(glong => long),
-            typ!(gulong => long),
-            typ!(glong64 => long),
-            typ!(gulong64 => long),
-            typ!(gshort => int),
-            typ!(gushort => int),
-            typ!(gshort64 => int),
-            typ!(gushort64 => int),
-            typ!(gfloat => float),
-            typ!(gdouble => float),
-            typ!(string => str),
-            typ!(GString => str),
-            typ!(utf8 => str),
+            map!(gboolean => bool),
+            map!(gint => int),
+            map!(guint => int),
+            map!(gint8 => int),
+            map!(guint8 => int),
+            map!(gint16 => int),
+            map!(guint16 => int),
+            map!(gint32 => int),
+            map!(guint32 => int),
+            map!(gint64 => int),
+            map!(guint64 => int),
+            map!(gsize => int),
+            map!(gpointer => Any),
+            map!(none => None),
+            map!(gchar => str),
+            map!(guchar => str),
+            map!(lit "gchar*" => str),
+            map!(lit "guchar*" => str),
+            map!(glong => long),
+            map!(gulong => long),
+            map!(glong64 => long),
+            map!(gulong64 => long),
+            map!(gshort => int),
+            map!(gushort => int),
+            map!(gshort64 => int),
+            map!(gushort64 => int),
+            map!(gfloat => float),
+            map!(gdouble => float),
+            map!(string => str),
+            map!(GString => str),
+            map!(utf8 => str),
         ]);
     };
     MAP.get(type_name).unwrap_or(&ANY)
@@ -94,21 +94,19 @@ impl Analyzer {
         ))
     }
 
-    pub fn try_an_type_like_tag(&mut self, tag: &str, ev: &mut Event) -> TagResult<Type> {
+    pub fn try_an_type_like_tag(&self, tag: &str, ev: &mut Event) -> TagResult<Type> {
         let (depth, attrs, ..) = tag_matches!(ev, tag);
 
         while ev.below(depth)? {}
 
-        Ok(Some(attrs.get("name").map_or(Type::Any, |s| {
-            let typ = class_or_type_to_native(&s);
-            if let Type::ExternalClass { module, .. } = &typ {
-                self.imports.insert(module.clone());
-            }
-            typ
-        })))
+        Ok(Some(
+            attrs
+                .get("name")
+                .map_or(Type::Any, |s| class_or_type_to_native(&s)),
+        ))
     }
 
-    pub fn try_an_class_type(&mut self, ev: &mut Event) -> TagResult<Type> {
+    pub fn try_a_class_type(&self, ev: &mut Event) -> TagResult<Type> {
         self.try_an_type_like_tag(TYPE_TAG, ev)
     }
 }

@@ -2,6 +2,7 @@ use if_chain::if_chain;
 
 use crate::declarations::{Function, Namespace, Type};
 
+#[macro_export]
 macro_rules! typ {
     (any) => {
         Type::Any
@@ -39,19 +40,19 @@ pub fn apply_overrides(ns: &mut Namespace) {
                 "The process command line arguments. Uses `sys.argv` if None",
             )
         }),
-        "Gtk" => t.transform_method("Button", "__init__", |run| {
-            run.clear_parameters()
-                .add_self_param()
-                .add_star_param()
-                .add_named_param(
-                    "label",
-                    typ!(str),
-                    false,
-                    "Text displayed inside the button",
-                )
-                .add_named_param("use_stock", typ!(bool), false, None)
-                .add_named_param("use_underline", typ!(bool), false, None)
-        }),
+        // "Gtk" => t.transform_method("Button", "__init__", |run| {
+        //     run.clear_parameters()
+        //         .add_self_param()
+        //         .add_star_param()
+        //         .add_named_param(
+        //             "label",
+        //             typ!(str),
+        //             false,
+        //             "Text displayed inside the button",
+        //         )
+        //         .add_named_param("use_stock", typ!(bool), false, None)
+        //         .add_named_param("use_underline", typ!(bool), false, None)
+        // }),
         _ => (),
     }
 }

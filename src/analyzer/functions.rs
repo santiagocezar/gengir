@@ -32,7 +32,7 @@ impl Analyzer {
                 doc = self.try_an_doc(ev)?;
             }
             if matches!(typ, Type::Any) {
-                if let Some(t) = self.try_an_class_type(ev)? {
+                if let Some(t) = self.try_a_class_type(ev)? {
                     typ = t;
                 }
             }
@@ -61,7 +61,7 @@ impl Analyzer {
                 doc = self.try_an_doc(ev)?;
             }
             if matches!(typ, Type::Any) {
-                if let Some(t) = self.try_an_class_type(ev)? {
+                if let Some(t) = self.try_a_class_type(ev)? {
                     typ = t;
                 }
             }
@@ -82,7 +82,7 @@ impl Analyzer {
     pub fn try_an_function(
         &mut self,
         ev: &mut Event,
-        method_of: Option<String>,
+        method_of: Option<&str>,
     ) -> TagResult<Function> {
         let (depth, attrs, tag) = tag_matches!(
             ev,
@@ -106,7 +106,7 @@ impl Analyzer {
 
         if let Some(class) = method_of {
             if tag == CONSTRUCTOR_TAG {
-                return_type = Type::LocalClass(class)
+                return_type = Type::LocalClass(class.to_string())
             }
         }
 

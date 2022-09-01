@@ -166,6 +166,8 @@ impl<W: Write> PythonGenerator<W> {
             writeln!(self.writer, "{}{}", body_indent, field)?;
             empty = false;
         }
+        self.write_function(class.constructor, body_indent)?;
+
         for method in class.methods {
             self.write_function(method, body_indent)?;
             empty = false;

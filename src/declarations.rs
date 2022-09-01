@@ -21,7 +21,7 @@ pub enum Value {
 pub struct Var {
     pub name: String,
     pub value: Option<Value>,
-    pub typ: Option<&'static Type>,
+    pub typ: Option<Type>,
     pub doc: Option<String>,
     pub constant: bool,
 }
@@ -78,6 +78,7 @@ pub struct Class {
     pub bases: Vec<Type>,
     pub fields: Vec<Var>,
     pub methods: IndexSet<Function>,
+    pub constructor: Function,
     pub doc: Option<String>,
 }
 
@@ -92,6 +93,20 @@ pub struct Namespace {
 }
 
 impl Function {
+    // pub fn build(name: &str) -> Self {
+    //     Self {
+    //         name: name.to_string(),
+    //         parameters: Vec::new(),
+    //         return_type: Type::Any,
+    //         kind: FunctionKind::Static,
+    //         return_doc: None,
+    //         doc: None,
+    //     }
+    // }
+    // pub fn kind(mut self, kind: FunctionKind) -> Self {
+    //     self.kind = kind;
+    //     self
+    // }
     pub fn clear_parameters(mut self) -> Self {
         self.parameters.clear();
         self
@@ -136,47 +151,34 @@ impl Function {
     }
 }
 
-impl Hash for Class {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        state.finish();
-    }
+macro_rules! index_by {
+    ($struct:ident::$field:ident: &$type:ident) => {
+        impl Hash for $struct {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.$field.hash(state);
+                state.finish();
+            }
+        }
+
+        impl PartialEq for $struct {
+            fn eq(&self, other: &Self) -> bool {
+                self.$field == other.$field
+            }
+        }
+
+        impl Eq for $struct {}
+
+        impl Borrow<$type> for $struct {
+            fn borrow(&self) -> &$type {
+                &self.$field
+            }
+        }
+    };
 }
 
-impl PartialEq for Class {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for Class {}
-
-impl Borrow<str> for Class {
-    fn borrow(&self) -> &str {
-        &self.name
-    }
-}
-
-impl Hash for Function {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        state.finish();
-    }
-}
-
-impl PartialEq for Function {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for Function {}
-
-impl Borrow<str> for Function {
-    fn borrow(&self) -> &str {
-        &self.name
-    }
-}
+index_by!(Class::name: &str);
+index_by!(Function::name: &str);
+index_by!(Namespace::name: &str);
 
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -202,7 +204,7 @@ impl std::fmt::Display for Value {
 impl std::fmt::Display for Var {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)?;
-        if let Some(typ) = self.typ {
+        if let Some(typ) = &self.typ {
             if self.constant {
                 write!(f, ": typing.Final[{}]", typ)?;
             } else {

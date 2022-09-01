@@ -1,8 +1,10 @@
+use std::collections::HashSet;
+
 use indexmap::IndexSet;
 
 use crate::{
-    declarations::{Class, FunctionKind, Param, Type},
-    tag_matches,
+    declarations::{Class, Function, FunctionKind, Param, Type},
+    tag_matches, typ,
 };
 
 use super::{
@@ -23,8 +25,10 @@ impl Analyzer {
         self.try_an_type_like_tag(IMPLEMENTS_TAG, ev)
     }
 
-    pub fn try_an_class(&mut self, ev: &mut Event) -> TagResult<Class> {
+    pub fn try_an_class(&mut self, ev: &mut Event) -> TagResult<(Class, HashSet<String>)> {
         let (depth, attrs, ..) = tag_matches!(ev, CLASS_TAG, INTERFACE_TAG, RECORD_TAG);
+
+        let mut imports = HashSet::new();
 
         let name = safe_name(attrs.get_must("name")?);
         let mut bases = Vec::new();
@@ -35,43 +39,61 @@ impl Analyzer {
         if let Some(parent) = attrs.get("parent") {
             let typ = class_or_type_to_native(&parent);
             if let Type::ExternalClass { module, .. } = &typ {
-                self.imports.insert(module.clone());
+                imports.insert(module.clone());
             }
             bases.push(typ)
         }
+
+        let mut con_params = vec![Param::Star];
 
         while ev.below(depth)? {
             if doc.is_none() {
                 doc = self.try_an_doc(ev)?;
             }
 
-            if let Some(f) = self.try_an_member(ev)? {
-                fields.push(f)
+            if let Some(f) = self.try_a_property(ev)? {
+                con_params.push(Param::Named {
+                    name: f.name.clone(),
+                    typ: f.typ.unwrap_or(Type::Any),
+                    doc: None,
+                    optional: true,
+                });
+                // fields.push(f)
             }
             if let Some(i) = self.try_an_implementor(ev)? {
+                if let Type::ExternalClass { module, .. } = &i {
+                    imports.insert(module.clone());
+                }
                 bases.push(i)
             }
-            if let Some(m) = self.try_an_function(ev, Some(name.clone()))? {
-                if m.name == "new" {
-                    let mut constructor = m.clone();
-                    constructor.name = "__init__".into();
-                    constructor.return_type = Type::Primitive("None".into());
-                    constructor.kind = FunctionKind::Method;
-                    // PyGObject constructors parameters are keyword-only
-                    constructor.parameters.insert(0, Param::Star);
-                    constructor.parameters.insert(0, Param::Instance);
-                    methods.insert(constructor);
-                }
+            if let Some(m) = self.try_an_function(ev, Some(&name))? {
                 methods.insert(m);
             }
         }
 
-        return Ok(Some(Class {
-            name,
-            bases,
-            doc,
-            fields,
-            methods,
-        }));
+        if con_params.len() == 1 {
+            con_params.clear();
+        }
+
+        let constructor = Function {
+            name: "__init__".into(),
+            parameters: con_params,
+            return_type: typ!(None),
+            kind: FunctionKind::Method,
+            return_doc: None,
+            doc: None,
+        };
+
+        return Ok(Some((
+            Class {
+                name,
+                bases,
+                doc,
+                fields,
+                constructor,
+                methods,
+            },
+            imports,
+        )));
     }
 }
