@@ -21,16 +21,12 @@ use crate::{generation::PythonGenerator, overrides::apply_overrides};
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
 struct Args {
-    /// Files to use as input for the generator. If not provided it uses all files in /usr/share/gir-1.0/
-    gir_files: Vec<String>,
+    /// Modules to generate typing stubs for. (e.g. Adw-1 GtkSource-5)
+    modules: Vec<String>,
 
     // Directory to store the package typings. $site-packages/gi-stubs by default
     #[clap(short, long, parse(from_os_str))]
     out_dir: Option<PathBuf>,
-
-    /// GTK version to generate typings for
-    #[clap(long = "gtk", default_value_t = 3)]
-    gtk_version: u8,
 
     /// Exclude docstrings in the typings
     #[clap(short, long)]
@@ -82,7 +78,7 @@ fn main() -> io::Result<()> {
 
     let mut analyzer = Analyzer::new(cli.no_docs);
 
-    for gir in cli.gir_files {
+    for gir in cli.modules {
         let split: Vec<_> = gir.split('-').take(2).collect();
         if split.len() == 2 {
             analyzer.analyze_repository(split[0], split[1]);
