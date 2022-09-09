@@ -36,6 +36,7 @@ const CONSTANT_TAG: &str = "constant";
 /// Analyzes a gir document
 pub struct Analyzer {
     ignore_docs: bool,
+    pub depth: usize,
     pub namespaces: IndexSet<Namespace>,
 }
 
@@ -54,17 +55,20 @@ impl Analyzer {
     pub fn new(ignore_docs: bool) -> Self {
         Self {
             ignore_docs,
+            depth: 0,
             namespaces: IndexSet::new(),
         }
     }
 
     pub fn analyze_repository(&mut self, module: &str, version: &str) {
-        println!("analyzing {module} version {version}");
+        eprintln!("{}{} v{}", &"| ".repeat(self.depth), module, version);
+        self.depth += 1;
         let fname = format!("{}-{}.gir", module, version);
         let gir = File::open(GIR_PATH.to_string() + &fname).unwrap();
         // let file = BufReader::new(file);
 
         let ns = self.analyze(gir);
+        self.depth -= 1;
 
         self.namespaces.insert(ns);
         // let mut analyzer = Analyzer::new(no_docs);
