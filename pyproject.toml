@@ -1,0 +1,49 @@
+[project]
+name = "gengir"
+version = "1.0.3"
+description = "Generate PEP 561 stubs for the GObject introspection library. Forked from fakegir"
+authors = [{ name = "Santiago Cézar", email = "santiagocezar2013@gmail.com" }]
+requires-python = ">=3.7,<4"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+keywords = [
+    "typing",
+    "type hints",
+    "gtk",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "lxml>=4.6.4,<5",
+    "astor>=0.8.1,<0.9",
+    "typer>=0.4.0,<0.28",
+]
+
+[project.urls]
+Repository = "https://github.com/santiagocezar/gengir"
+
+[project.scripts]
+gengir = "gengir.cli:run_cli"
+
+[dependency-groups]
+dev = [
+    "bandit>=1.7.1,<2",
+    "black>=21.11b1,<22",
+    "lxml-stubs>=0.3.0,<0.4",
+]
+
+[tool.uv.build-backend]
+module-root = ""
+
+[build-system]
+requires = ["uv_build>=0.11.25,<0.12.0"]
+build-backend = "uv_build"
